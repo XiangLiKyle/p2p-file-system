@@ -28,9 +28,11 @@ int main()
             return 0;
         }
         
+        char buffer [1024];
+        //buffer = "3 file1 321 file2 3331"
         sockaddr_in serAddr;
         serAddr.sin_family = AF_INET;
-        serAddr.sin_port = htons(8888);
+        serAddr.sin_port = htons(7777);
         serAddr.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
         if(connect(m_Client, (sockaddr *)&serAddr, sizeof(serAddr)) == SOCKET_ERROR)
         {  //连接失败 
@@ -38,7 +40,12 @@ int main()
             closesocket(m_Client);
             return 0;
         }
-        RecvFile();
+        //RecvFile();
+        int buffer_size = 1024;
+        send(m_Client, "1 2 file1 321 file2 20248881", 28, 0);
+        int len = recv(m_Client, buffer, buffer_size, 0);
+        cout<<buffer<<endl;
+        cout<<len<<endl;
         closesocket(m_Client);
     //}
     
