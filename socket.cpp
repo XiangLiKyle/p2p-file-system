@@ -8,30 +8,6 @@
 using namespace std;
 
 
-
-
-// void SendFile()
-// {
-//     int haveSend = 0;
-//     const int bufferSize = 1024;
-//     char buffer[bufferSize] = {0};
-//     int readLen = 0;
-//     string srcFileName = "in";
-//     ifstream srcFile;
-//     srcFile.open(srcFileName.c_str(),ios::binary);
-//     if(!srcFile){
-//         return;
-//     }
-//     while(!srcFile.eof()){
-//         srcFile.read(buffer,bufferSize);
-//         readLen = srcFile.gcount();
-//         send(m_Client,buffer,readLen,0);
-//         haveSend += readLen;    
-//     }
-//     srcFile.close();
-//     cout<<"send: "<<haveSend<<"B"<<endl;
-// }
-
 int main(int argc, char* argv[])  
 {  
     WORD sockVersion = MAKEWORD(2,2);  
@@ -44,8 +20,6 @@ int main(int argc, char* argv[])
     Server_socket server(8888);
     server.Start_listen();
 
-  
-    //循环接收数据  
     sockaddr_in remoteAddr;  
     int nAddrlen = sizeof(remoteAddr);  
     char revData[255];   
@@ -60,7 +34,10 @@ int main(int argc, char* argv[])
             printf("accept error !");  
             continue;  
         }  
+
         printf("received: %s \r\n", inet_ntoa(remoteAddr.sin_addr));  
+        server.Send(m_Client, "1010", 4);
+        server.SendFile(m_Client, "origin.txt");
         //SendFile();
         closesocket(m_Client);  
     }  

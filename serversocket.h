@@ -9,6 +9,10 @@ using namespace std;
 class Server_socket
 {
 
+	const int chunk_size = 1<<20;
+	const int buffer_size = 1<<10;
+
+ 
 public:	
 	SOCKET server;
 	sockaddr_in sin;  
@@ -16,25 +20,9 @@ public:
 	Server_socket(int host);
 	void Start_listen();
 	void Close();
+	void Send(int client, char* msg, int len);
+	int Recv(int client, char* buffer);
+	void SendFile(int client, string filename);
+	void RecvFile(int client, string filename);
+
 };
-
-Server_socket::Server_socket(int host)
-{
-	server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	
-	sin.sin_family = AF_INET;  
-	sin.sin_port = htons(host);  
-	sin.sin_addr.S_un.S_addr = INADDR_ANY;
-}
-
-void Server_socket::Start_listen()
-{
-	bind(server, (LPSOCKADDR)&sin, sizeof(sin));
-	listen(server, 20);
-	return;
-}
-
-void Server_socket::Close()
-{
-	closesocket(server);  
-}
