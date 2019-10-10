@@ -13,7 +13,7 @@ using namespace std;
 
 #define MAX_FILE_NAME 200
 #define MAX_MSG 2000
-#define MAX_FILE_NUM 50
+#define MAX_FILE_NUM 500
 #define MAX_FILE_LENGTH 100
 #define MAX_CHUNK 100
 #define MAX_TOTAL_MESSAGE 20000
@@ -26,6 +26,7 @@ int peer_file_num;
 vector<string> sp;
 int request_num;
 string file_list[MAX_FILE_NUM];
+string chunk_list[MAX_FILE_NUM];
 string local_file_path = "D:\\work\\psu\\distributed system\\project1\\backup\\files";
 string local_chunk_path = "D:\\work\\psu\\distributed system\\project1\\backup\\chunks";
 
@@ -110,7 +111,8 @@ void init_request(int request_num, SOCKET target)
 		//next step
 	}
 
-	if(request_num == 2) //bug
+
+	if(request_num == 2)
 	{
 		//SOCKET target;
 		cout << "File list requested!" << endl;
@@ -137,7 +139,7 @@ void init_request(int request_num, SOCKET target)
 			printf("%d. File name: %s File size:%d\n",i,recv_file_name[i-1].c_str(),recv_file_size[i-1]);
 	}
 
-	if(request_num == 3) //bug
+	if(request_num == 3)
 	{
 		//SOCKET target;
 		cout << "File location requested!" << endl;
@@ -158,7 +160,7 @@ void init_request(int request_num, SOCKET target)
 		}
 	}
 
-	if(request_num == 4) //bug
+	if(request_num == 4)
 	{
 		//SOCKET target;
 		cout << "Chunk register requested!" << endl;
@@ -173,7 +175,8 @@ void init_request(int request_num, SOCKET target)
 		}
 	}
 
-	if(request_num == 5) //bug
+
+	if(request_num == 5)
 	{
 		//SOCKET target;
 		cout << "File chunk requested!" << endl;
@@ -214,18 +217,15 @@ void dir(string path)
 	struct _finddata_t fileInfo;
 	string pathName;
 	long hFile = 0;
-	hFile = _findfirst(path.append("\\*").c_str(),&fileInfo);
-	//cout << hFile << endl;
-	if(hFile == -1)
-		return;
+	if ((hFile = _findfirst(pathName.assign(path).append("\\*").c_str(), &fileInfo)) == -1)
+        return;
 	int i = 0;
 	do
 	{
 		file_list[i] = fileInfo.name;
-		cout << fileInfo.name << endl;
 		i++;
 		//cout << file_list[i] << endl;
-	}while(_findnext(hFile,&fileInfo));
+	}while(_findnext(hFile,&fileInfo) == 0);
 	peer_file_num = i+1;
 	_findclose(hFile);
 	//return;
@@ -346,20 +346,47 @@ void handle(Server_socket server, int request_peer)
 
 int main()
 {
-	//dir(local_file_path);
-	//for(int i = 0; i < peer_file_num; i++)
-	//{
-	//	file_splitter(file_list[i]);
-	//}
-	//cout << "file splitted!" << endl;
+	dir(local_file_path);
+	for(int i = 0; i < peer_file_num; i++)
+	{
+		file_splitter(file_list[i]);
+	}
+	cout << "file splitted!" << endl;
 	//listen
+	dir(local_chunk_path);
+	for(int i = 0; i < peer_file_num; i++)
+	{
+		chunk_list[i] = file_list[i];
+		cout << chunk_list[i] << endl;
+	}
 	WORD sockVersion = MAKEWORD(2, 2);
     WSADATA data;
     if(WSAStartup(sockVersion, &data)!=0)
     {
         return 0;
     }
-    
+    Server_socket server(local_port);
+    server.Start_listen();
+    sockaddr_in remoteAddr;  
+	int nAddrlen = sizeof(remoteAddr);  
+	char revData[255];   
+	SOCKET Client; 
+	int len;
+	string type;
+	while(1)  
+	{  
+		printf("Start Listening\n");  
+		Client = accept(server.server, (SOCKADDR *)&remoteAddr, &nAddrlen);
+		if(Client == INVALID_SOCKET)  
+		{  
+			printf("Socket Error!");  
+			continue;  
+		}  
+
+		printf("Connection received: %s \n", inet_ntoa(remoteAddr.sin_addr));
+		handle(server,Client);
+		closesocket(Client);
+	}
 
 	//request
     cout << "Request number:" << endl;
