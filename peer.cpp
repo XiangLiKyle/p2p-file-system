@@ -23,13 +23,11 @@ const int buffer_size = 1024;
 
 map<string, int> filemap;
 int peer_file_num;
-//int m_server;
-//int target_peer;
 vector<string> sp;
 int request_num;
 string file_list[MAX_FILE_NUM];
-string local_file_path;
-string local_chunk_path;
+string local_file_path = "D:\\work\\psu\\distributed system\\project1\\backup\\files";
+string local_chunk_path = "D:\\work\\psu\\distributed system\\project1\\backup\\chunks";
 
 
 struct register_requset
@@ -76,7 +74,7 @@ void SplitString(const string& s, vector<std::string>& v, const string& c)
 }
 
 
-void init_request(Server_socket server, int request_num, SOCKET target)
+void init_request(int request_num, SOCKET target)
 {
 	//Server_socket server(local_port);
 	char num_buffer[1024];
@@ -95,16 +93,16 @@ void init_request(Server_socket server, int request_num, SOCKET target)
 		//SOCKET target;
 		cout<<"Register requseted"<<endl;
 		total_message = sprintf(num_buffer,"%d %s",request_num," ");
-		total_message += sprintf(num_buffer + total_message, "%d%s",rr.file_num,"/0");
+		total_message += sprintf(num_buffer + total_message, "%d%s",rr.file_num," ");
 		for(int i = 0; i < peer_file_num; i++)
 		{
-			total_message += sprintf(num_buffer + total_message,"%s%s%d%s",rr.file_name[i],"/0",rr.file_length[i],"/0");
+			total_message += sprintf(num_buffer + total_message,"%s%s%d%s",rr.file_name[i]," ",rr.file_length[i]," ");
 		}
-		server.Send(target,num_buffer,total_message);
+		send(target,num_buffer,total_message,0);
 
 
 		//receive message
-		len = server.Recv(target,recv_buffer);
+		len = recv(target,recv_buffer,buffer_size,0);
 		if(recv_buffer == "1")
 		{
 			cout << "Register request success!" << endl;
@@ -116,11 +114,11 @@ void init_request(Server_socket server, int request_num, SOCKET target)
 	{
 		//SOCKET target;
 		cout << "File list requested!" << endl;
-		total_message = sprintf(num_buffer,"%d%s",request_num,"/0");
-		server.Send(target,num_buffer,2);
+		total_message = sprintf(num_buffer,"%d%s",request_num," ");
+		send(target,num_buffer,2,0);
 
 		//receieve message
-		len = server.Recv(target,recv_buffer);
+		len = recv(target,recv_buffer,buffer_size,0);
 		SplitString(recv_buffer,sp," ");
 		int recv_file_num = atoi(sp[0].c_str());
 		string recv_file_name[recv_file_num];
@@ -138,12 +136,12 @@ void init_request(Server_socket server, int request_num, SOCKET target)
 	{
 		//SOCKET target;
 		cout << "File location requested!" << endl;
-		total_message = sprintf(num_buffer,"%d%s",request_num,"/0");
-		total_message += sprintf(num_buffer + total_message, "%d%s",flr.file_name,"/0");
-		server.Send(target,num_buffer,total_message);
+		total_message = sprintf(num_buffer,"%d%s",request_num," ");
+		total_message += sprintf(num_buffer + total_message, "%d%s",flr.file_name," ");
+		send(target,num_buffer,total_message,0);
 
 		//receive file
-		len = server.Recv(target,recv_buffer);
+		len = recv(target,recv_buffer,buffer_size,0);
 		SplitString(recv_buffer,sp," ");
 		int recv_tmplist_size = atoi(sp[0].c_str());
 		string recv_ips[MAX_FILE_NUM];
@@ -161,11 +159,11 @@ void init_request(Server_socket server, int request_num, SOCKET target)
 	{
 		//SOCKET target;
 		cout << "Chunk register requested!" << endl;
-		total_message = sprintf(num_buffer,"%d%s",request_num,"/0");
-		total_message += sprintf(num_buffer + total_message, "%s%s%d%s",crr.file_name,"/0",crr.chunk_num,"/0");
-		server.Send(target,num_buffer,total_message);
+		total_message = sprintf(num_buffer,"%d%s",request_num," ");
+		total_message += sprintf(num_buffer + total_message, "%s%s%d%s",crr.file_name," ",crr.chunk_num," ");
+		send(target,num_buffer,total_message,0);
 
-		len = server.Recv(target,recv_buffer);
+		len = recv(target,recv_buffer,buffer_size,0);
 		if(recv_buffer == "1")
 		{
 			cout << "Chunk register success!" << endl;
@@ -176,9 +174,9 @@ void init_request(Server_socket server, int request_num, SOCKET target)
 	{
 		//SOCKET target;
 		cout << "File chunk requested!" << endl;
-		total_message = sprintf(num_buffer,"%d%s",request_num,"/0");
-		total_message += sprintf(num_buffer + total_message, "%s%s%d%s",fcr.file_name,"/0",fcr.chunk_num,"/0");
-		server.Send(target,num_buffer,total_message);
+		total_message = sprintf(num_buffer,"%d%s",request_num," ");
+		total_message += sprintf(num_buffer + total_message, "%s%s%d%s",fcr.file_name," ",fcr.chunk_num," ");
+		send(target,num_buffer,total_message,0);
 
 		//receive file
 		cout << "Start receive files!" << endl;
@@ -213,18 +211,21 @@ void dir(string path)
 	struct _finddata_t fileInfo;
 	string pathName;
 	long hFile = 0;
-	hFile = _findfirst(path.c_str(),&fileInfo);
+	hFile = _findfirst(path.append("\\*").c_str(),&fileInfo);
+	//cout << hFile << endl;
 	if(hFile == -1)
 		return;
 	int i = 0;
 	do
 	{
 		file_list[i] = fileInfo.name;
+		cout << fileInfo.name << endl;
 		i++;
+		//cout << file_list[i] << endl;
 	}while(_findnext(hFile,&fileInfo));
 	peer_file_num = i+1;
 	_findclose(hFile);
-	return;
+	//return;
 
 }
 
@@ -232,7 +233,8 @@ void file_splitter(string file_name)
 {
 	fstream fsin,fsout;
 	string temp_chunk;
-	fsin.open((local_file_path + file_name).c_str(),ios::in|ios::binary);
+	fsin.open((local_file_path + '\\' + file_name).c_str(),ios::in|ios::binary);
+	cout << (local_file_path + '\\' + file_name).c_str() << endl;
 	if(!fsin)
 	{
 		cout << "Invalid file name" << endl;
@@ -247,18 +249,19 @@ void file_splitter(string file_name)
 	for(int i = 0; i < chunks - 1; i++)
 	{
 		itoa(i,num,10);
-		temp_chunk = local_chunk_path + file_name + "#" + num;
+		temp_chunk = local_chunk_path + "/" + file_name + "#" + num;
 		fsout.open(temp_chunk.c_str(),ios::out|ios::binary);
 
 		fsin.read(chunk_in,sizeof(chunk_in));
 		fsout.write(chunk_in,sizeof(chunk_in));
 		fsout.close();
 	}
+	cout << "n-1!" << endl;
 	delete [] chunk_in;
 
 	int endchunk = file_size - buffer_size*(chunks-1);
 	itoa(chunks - 1,num,10);
-	temp_chunk = local_chunk_path + file_name + "#" + num;
+	temp_chunk = local_chunk_path + "/" + file_name + "#" + num;
 	fsout.open(temp_chunk.c_str(),ios::out|ios::binary);
 	char chunk_last[endchunk];
 	fsin.read(chunk_last,sizeof(chunk_last));
@@ -340,11 +343,12 @@ void handle(Server_socket server, int request_peer)
 
 int main()
 {
-	dir(local_file_path);
-	for(int i = 0; i < peer_file_num; i++)
-	{
-		file_splitter(file_list[i]);
-	}
+	//dir(local_file_path);
+	//for(int i = 0; i < peer_file_num; i++)
+	//{
+	//	file_splitter(file_list[i]);
+	//}
+	//cout << "file splitted!" << endl;
 	//listen
 	WORD sockVersion = MAKEWORD(2, 2);
     WSADATA data;
@@ -352,28 +356,6 @@ int main()
     {
         return 0;
     }
-    Server_socket server(local_port);
-    server.Start_listen();
-    sockaddr_in remoteAddr;  
-	int nAddrlen = sizeof(remoteAddr);  
-	char revData[255];   
-	SOCKET Client; 
-	int len;
-	string type;
-	while(1)  
-	{  
-		printf("Start Listening\n");  
-		Client = accept(server.server, (SOCKADDR *)&remoteAddr, &nAddrlen);
-		if(Client == INVALID_SOCKET)  
-		{  
-			printf("Socket Error!");  
-			continue;  
-		}  
-
-		printf("Connection received: %s \n", inet_ntoa(remoteAddr.sin_addr));
-		handle(server,Client);
-		closesocket(Client);
-	}
     
 
 	//request
@@ -386,7 +368,26 @@ int main()
     else
     {
     	SOCKET target;
-    	init_request(server,request_num,target);
+    	target = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+        if(target == INVALID_SOCKET)
+        {
+            printf("invalid socket!");
+            return 0;
+        }
+        
+        char buffer [1024];
+        //buffer = "3 file1 321 file2 3331"
+        sockaddr_in serAddr;
+        serAddr.sin_family = AF_INET;
+        serAddr.sin_port = htons(7777);
+        serAddr.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
+        if(connect(target, (sockaddr *)&serAddr, sizeof(serAddr)) == SOCKET_ERROR)
+        {  //连接失败 
+            printf("connect error !");
+            closesocket(target);
+            return 0;
+        }
+    	init_request(request_num,target);
     }
 
 
