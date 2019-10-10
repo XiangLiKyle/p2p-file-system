@@ -6,6 +6,10 @@
 
 using namespace std;
 
+#ifndef SSH
+#define SSH
+
+
 class Server_socket
 {
 
@@ -26,3 +30,6 @@ public:
 	void RecvFile(int client, string filename);
 
 };
+
+#endif
+

@@ -8,3 +8,6 @@ server: serversocket.o server.cpp
 
 client: client.cpp
 	g++ -o client client.cpp -lws2_32
+
+peer: peer.cpp
+	g++ -o peer peer.cpp serversocket.o -lws2_32
