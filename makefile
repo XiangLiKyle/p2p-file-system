@@ -1,4 +1,4 @@
-target: server client
+target: server client peer
 
 serversocekt.o: serversocket.cpp serversocket.h
 	g++ -c serversocket.cpp serversocket.h -lws2_32

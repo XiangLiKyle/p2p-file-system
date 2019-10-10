@@ -110,7 +110,7 @@ void init_request(int request_num, SOCKET target)
 		//next step
 	}
 
-	if(request_num = 2)
+	if(request_num == 2) //bug
 	{
 		//SOCKET target;
 		cout << "File list requested!" << endl;
@@ -119,8 +119,10 @@ void init_request(int request_num, SOCKET target)
 
 		//receieve message
 		len = recv(target,recv_buffer,buffer_size,0);
+
 		SplitString(recv_buffer,sp," ");
 		int recv_file_num = atoi(sp[0].c_str());
+
 		string recv_file_name[recv_file_num];
 		int recv_file_size[recv_file_num];
 		for(int i = 1; i <= recv_file_num; i++)
@@ -130,9 +132,12 @@ void init_request(int request_num, SOCKET target)
 		}
 		//next step
 
+		printf("File List\n"); //display file list
+		for(int i = 1; i <= recv_file_num; i++)
+			printf("%d. File name: %s File size:%d\n",i,recv_file_name[i-1].c_str(),recv_file_size[i-1]);
 	}
 
-	if(request_num = 3)
+	if(request_num == 3) //bug
 	{
 		//SOCKET target;
 		cout << "File location requested!" << endl;
@@ -151,11 +156,9 @@ void init_request(int request_num, SOCKET target)
 			recv_ips[i-1] = sp[i*2-1];
 			recv_ports[i-1] = atoi(sp[i*2].c_str());
 		}
-
-
 	}
 
-	if(request_num = 4)
+	if(request_num == 4) //bug
 	{
 		//SOCKET target;
 		cout << "Chunk register requested!" << endl;
@@ -170,7 +173,7 @@ void init_request(int request_num, SOCKET target)
 		}
 	}
 
-	if(request_num = 5)
+	if(request_num == 5) //bug
 	{
 		//SOCKET target;
 		cout << "File chunk requested!" << endl;
