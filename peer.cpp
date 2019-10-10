@@ -11,12 +11,12 @@
 #include "serversocket.h"
 using namespace std;
 
-#define MAX_FILE_NAME = 200;
-#define MAX_MSG = 200;
-#define MAX_FILE_NUM = 50;
-#define MAX_FILE_LENGTH = 100;
-#define MAX_CHUNK = 100;
-#define MAX_TOTAL_MESSAGE = 20000;
+#define MAX_FILE_NAME 200
+#define MAX_MSG 2000
+#define MAX_FILE_NUM 50
+#define MAX_FILE_LENGTH 100
+#define MAX_CHUNK 100
+#define MAX_TOTAL_MESSAGE 20000
 
 const int local_port = 7777;
 const int buffer_size = 1024;
@@ -35,8 +35,8 @@ string local_chunk_path;
 struct register_requset
 {
 	int file_num;
-	char file_name[peer_file_num][MAX_FILE_NAME];
-	int file_length[peer_file_num];
+	string file_name[MAX_FILE_NUM];
+	int file_length[MAX_FILE_NUM];
 };
 
 struct file_location_request
@@ -78,9 +78,9 @@ void SplitString(const string& s, vector<std::string>& v, const string& c)
 
 void init_request(Server_socket server, int request_num, SOCKET target)
 {
-	Server_socket server;
+	//Server_socket server(local_port);
 	char num_buffer[1024];
-	char total_message[MAX_TOTAL_MESSAGE];
+	int total_message;
 	register_requset rr;
 	file_location_request flr;
 	chunk_register_request crr;
@@ -94,13 +94,13 @@ void init_request(Server_socket server, int request_num, SOCKET target)
 	{
 		//SOCKET target;
 		cout<<"Register requseted"<<endl;
-		total_message = sprintf(num_buffer,"%d%s",request_num,"/0");
-		total_message+ = sprintf(num_buffer + total_message, "%d%s",rr.file_num,"/0");
+		total_message = sprintf(num_buffer,"%d %s",request_num," ");
+		total_message += sprintf(num_buffer + total_message, "%d%s",rr.file_num,"/0");
 		for(int i = 0; i < peer_file_num; i++)
 		{
-			total_message+ = sprintf(num_buffer + total_message,,"%s%s%d%s",rr.file_name[i],"/0",rr.file_length[i],"/0");
+			total_message += sprintf(num_buffer + total_message,"%s%s%d%s",rr.file_name[i],"/0",rr.file_length[i],"/0");
 		}
-		server.send(target,total_message,strlen(total_message));
+		server.Send(target,num_buffer,total_message);
 
 
 		//receive message
@@ -117,7 +117,7 @@ void init_request(Server_socket server, int request_num, SOCKET target)
 		//SOCKET target;
 		cout << "File list requested!" << endl;
 		total_message = sprintf(num_buffer,"%d%s",request_num,"/0");
-		server.send(target,total_message,2);
+		server.Send(target,num_buffer,2);
 
 		//receieve message
 		len = server.Recv(target,recv_buffer);
@@ -139,18 +139,18 @@ void init_request(Server_socket server, int request_num, SOCKET target)
 		//SOCKET target;
 		cout << "File location requested!" << endl;
 		total_message = sprintf(num_buffer,"%d%s",request_num,"/0");
-		total_message+ = sprintf(num_buffer + total_message, "%d%s",flr.file_name,"/0");
-		server.send(target,total_message,strlen(total_message));
+		total_message += sprintf(num_buffer + total_message, "%d%s",flr.file_name,"/0");
+		server.Send(target,num_buffer,total_message);
 
 		//receive file
 		len = server.Recv(target,recv_buffer);
 		SplitString(recv_buffer,sp," ");
-		int recv_tmplist_size = atoi(sp[0].c_str);
-		string recv_ips;
-		int recv_ports;
+		int recv_tmplist_size = atoi(sp[0].c_str());
+		string recv_ips[MAX_FILE_NUM];
+		int recv_ports[MAX_FILE_NUM];
 		for(int i = 1; i <= recv_tmplist_size; i++)
 		{
-			recv_ips[i-1] = sp[i*2-1];;
+			recv_ips[i-1] = sp[i*2-1];
 			recv_ports[i-1] = atoi(sp[i*2].c_str());
 		}
 
@@ -162,8 +162,8 @@ void init_request(Server_socket server, int request_num, SOCKET target)
 		//SOCKET target;
 		cout << "Chunk register requested!" << endl;
 		total_message = sprintf(num_buffer,"%d%s",request_num,"/0");
-		total_message+ = sprintf(num_buffer + total_message, "%s%s%d%s",crr.file_name,"/0",crr.chunk_num,"/0");
-		server.send(target,total_message,strlen(total_message));
+		total_message += sprintf(num_buffer + total_message, "%s%s%d%s",crr.file_name,"/0",crr.chunk_num,"/0");
+		server.Send(target,num_buffer,total_message);
 
 		len = server.Recv(target,recv_buffer);
 		if(recv_buffer == "1")
@@ -177,13 +177,12 @@ void init_request(Server_socket server, int request_num, SOCKET target)
 		//SOCKET target;
 		cout << "File chunk requested!" << endl;
 		total_message = sprintf(num_buffer,"%d%s",request_num,"/0");
-		total_message+ = sprintf(num_buffer + total_message, "%s%s%d%s",fcr.file_name,"/0",fcr.chunk_num,"/0");
-		server.send(target,total_message,strlen(total_message));
+		total_message += sprintf(num_buffer + total_message, "%s%s%d%s",fcr.file_name,"/0",fcr.chunk_num,"/0");
+		server.Send(target,num_buffer,total_message);
 
 		//receive file
 		cout << "Start receive files!" << endl;
 		char file_buffer[buffer_size] = {0};
-		int readLen = 0;
 		int readLen = 0;
     	string desFileName = "peer_new_in";
     	ofstream desFile;
@@ -280,10 +279,10 @@ void file_assembler(string file_name,int file_num)
 	{
 		itoa(i,num,10);
 		temp_chunk = local_chunk_path + file_name + "#" + num;
-		fsin.open(tempstr.c_str(),ios::in|ios::binary);
-		fsin.read(chunk_in,sizeof(chunk_in));
-		fsout.write(chunk_in,sizeof(chunk_in));
-		fsin.close();
+		fain.open(temp_chunk.c_str(),ios::in|ios::binary);
+		fain.read(chunk_in,sizeof(chunk_in));
+		faout.write(chunk_in,sizeof(chunk_in));
+		fain.close();
 	}
 	delete [] chunk_in;
 
@@ -302,10 +301,11 @@ void file_assembler(string file_name,int file_num)
 	delete [] chunk_last;
 }
 
-void handle(int request_peer)
+void handle(Server_socket server, int request_peer)
 {	
 	char recv_msg[buffer_size];
 	cout << "File Chunk Request received!" << endl;
+	int len;
 	len = server.Recv(request_peer,recv_msg);
 	SplitString(recv_msg,sp," ");
 	string request_file_name = sp[1];
@@ -329,7 +329,7 @@ void handle(int request_peer)
 	{
 		srcFile.read(buffer, buffer_size);
 		readlen = srcFile.gcount();
-		send(client, buffer, readlen, 0);
+		send(request_peer, buffer, readlen, 0);
 		havesend += readlen;	
 	}
 
@@ -371,14 +371,14 @@ int main()
 		}  
 
 		printf("Connection received: %s \n", inet_ntoa(remoteAddr.sin_addr));
-		handle(Client);
+		handle(server,Client);
 		closesocket(Client);
 	}
     
 
 	//request
     cout << "Request number:" << endl;
-    cin >> request_num >> endl;
+    cin >> request_num;
     if(request_num > 5 && request_num < 1)
     {
     	cout << "invalid request" << endl;
