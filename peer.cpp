@@ -17,11 +17,16 @@ using namespace std;
 #define MAX_CHUNK = 100;
 #define MAX_TOTAL_MESSAGE = 20000;
 
+const int local_port = 7777;
+
 map<string, int> filemap;
 int peer_file_num;
 int m_server;
 int target_peer;
 vector<string> sp;
+int request_num;
+char basedir[MAX_FILE_NAME];
+
 
 
 struct register_requset
@@ -48,6 +53,7 @@ struct file_chuck_request
 	int chunk_num;
 };
 
+
 void SplitString(const string& s, vector<std::string>& v, const string& c)
 {
   string::size_type pos1, pos2;
@@ -67,8 +73,9 @@ void SplitString(const string& s, vector<std::string>& v, const string& c)
 }
 
 
-void init_request(int request_num)
+void init_request(Server_socket server, int request_num)
 {
+	Server_socket server;
 	//long long bytes_sent, bytes_rcvd;
 	char num_buffer[1024];
 	char total_message[MAX_TOTAL_MESSAGE];
@@ -171,7 +178,7 @@ void init_request(int request_num)
 
 		//receive file
 		cout << "Start receive files!" << endl;
-		char file_buffer[1024] = {0};
+		char file_buffer[buffer_size] = {0};
 		int readLen = 0;
 		int readLen = 0;
     	string desFileName = "peer_new_in";
@@ -183,14 +190,14 @@ void init_request(int request_num)
     	}
     	do 
     	{
-        	readLen = recv(m_Client,buffer,bufferSize, 0);
+        	readLen = recv(target_peer,file_buffer,buffer_size, 0);
         	if (readLen == 0)
         	{
             	break;
         	}
         	else
         	{
-            	desFile.write(buffer, readLen);
+            	desFile.write(file_buffer, readLen);
         	}
     	} while(true);
     	desFile.close();
@@ -198,9 +205,132 @@ void init_request(int request_num)
 
 }
 
+void file_splitter(string file_name)
+{
+	fstream fsin,fsout;
+	string tempstr;
+	fsin.open(file_name.c_str(),ios::in|ios::binary);
+	if(!fsin)
+	{
+		cout << "Invalid file name" << endl;
+		return;
+	}
+	fsin.seekg(0,ios::end);
+	int file_size = fsin.tellg();
+	fsin.seekg(0,ios::beg);
+	int chunks = file_size / buffer_size + 1;
+	char num[10];
+	char chunk_in[buffer_size];
+	for(int i = 0; i < chunks - 1; i++)
+	{
+		itoa(i,num,10);
+		tempstr = file_name + "#" + num;
+		fsout.open(tempstr.c_str(),ios::out|ios::binary);
+
+		fsin.read(chunk_in,sizeof(chunk_in));
+		fsout.write(chunk_in,sizeof(chunk_in));
+		fsout.close();
+	}
+	delete [] chunk_in;
+
+	int endchunk = file_size - buffer_size*(chunks-1);
+	itoa(chunks - 1,num,10);
+	tempstr = file_name + "#" + num;
+	fsout.open(tempstr.c_str(),ios::out|ios::binary);
+	char chunk_last[endchunk];
+	fsin.read(chunk_last,sizeof(chunk_last));
+	fsout.write(chunk_last,sizeof(chunk_last));
+	fsout.close();
+	delete [] chunk_last;
+}
+
+void file_assembler(string file_name,int file_num)
+{
+	fstream fain,faout;
+	string tempstr;
+	faout.open(file_name.c_str(),ios::out|ios::binary);
+
+	//int file_size = fsin.tellg();
+	//int chunks = file_size / buffer_size + 1;
+	char num[10];
+	char chunk_in[buffer_size];
+	for(int i = 0; i < file_num - 1; i++)
+	{
+		itoa(i,num,10);
+		tempstr = file_name + "#" + num;
+		fsin.open(tempstr.c_str(),ios::in|ios::binary);
+		fsin.read(chunk_in,sizeof(chunk_in));
+		fsout.write(chunk_in,sizeof(chunk_in));
+		fsin.close();
+	}
+	delete [] chunk_in;
+
+	//int endchunk = file_size - buffer_size*(chunks-1);
+	itoa(file_num - 1,num,10);
+	tempstr = file_name + "#" + num;
+	fain.open(tempstr.c_str(),ios::in|ios::binary);
+	fain.seekg(0,ios::end);
+	int endchunk = fain.tellg();
+	fain.seekg(0,ios::beg);
+
+	char chunk_last[endchunk];
+	fain.read(chunk_last,sizeof(chunk_last));
+	faout.write(chunk_last,sizeof(chunk_last));
+	fain.close();
+	faout.close();
+	delete [] chunk_last;
+}
+
+void handle(int request_peer)
+{	
+	char recv_msg[buffer_size];
+	cout << "File Chunk Request received!" << endl;
+	len = server.Recv(request_peer,recv_msg);
+	SplitString(recv_msg,sp," ");
+	string request_file_name = sp[1];
+	int request_chunk = atoi(sp[2].c_str());
+	
+	//send chunk
+	char buffer[buffer_size];
+
+	int havesend = 0;
+	int readlen = 0;
+
+	ifstream srcFile;
+	srcFile.open(request_file_name, ios::binary);
+	if(!srcFile)
+		return;
+	
+	while(!srcFile.eof())
+	{
+		srcFile.read(buffer, buffer_size);
+		readlen = srcFile.gcount();
+		send(client, buffer, readlen, 0);
+		havesend += readlen;	
+	}
+
+	srcFile.close();
+
+}
+
 int main()
 {
-	Server_socket server(7777);
-	server.Start_listen();
+	WORD sockVersion = MAKEWORD(2, 2);
+    WSADATA data;
+    if(WSAStartup(sockVersion, &data)!=0)
+    {
+        return 0;
+    }
+    Server_socket server(local_port);
+    server.Start_listen();
+    cout << "Request number:" << endl;
+    cin >> request_num >> endl;
+    if(request_num > 5 && request_num < 1)
+    {
+    	cout << "invalid request" << endl;
+    }
+    else
+    	init_request(server,request_num);
+
 
 }
