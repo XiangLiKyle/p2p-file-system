@@ -42,14 +42,60 @@ int main()
         }
         //RecvFile();
         int buffer_size = 1024;
-        send(m_Client, "1 2 file1 321 file2 20248881", 28, 0);
+        send(m_Client, "1 ", 2, 0);
+        send(m_Client, "2 ", 2, 0);
+        send(m_Client, "file1 321 file2 20248881", 25, 0);
+
         int len = recv(m_Client, buffer, buffer_size, 0);
         cout<<buffer<<endl;
+                
+        m_Client = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+
+        if(connect(m_Client, (sockaddr *)&serAddr, sizeof(serAddr)) == SOCKET_ERROR)
+        {  //连接失败 
+            printf("connect error !");
+            closesocket(m_Client);
+        }
+
+        send(m_Client, "2", 1, 0);
+        
+        len = recv(m_Client, buffer, buffer_size, 0);
+        cout<<buffer<<endl;
         cout<<len<<endl;
+
         closesocket(m_Client);
     //}
-    
-    
+        m_Client = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+
+        if(connect(m_Client, (sockaddr *)&serAddr, sizeof(serAddr)) == SOCKET_ERROR)
+        {  //连接失败 
+            printf("connect error !");
+            closesocket(m_Client);
+        }
+
+        send(m_Client, "3 file2", 7, 0);
+        
+        len = recv(m_Client, buffer, buffer_size, 0);
+        cout<<buffer<<endl;
+        cout<<len<<endl;
+
+        closesocket(m_Client);    
+
+        m_Client = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+
+        if(connect(m_Client, (sockaddr *)&serAddr, sizeof(serAddr)) == SOCKET_ERROR)
+        {  //连接失败 
+            printf("connect error !");
+            closesocket(m_Client);
+        }
+
+        send(m_Client, "4 file2 1", 9, 0);
+        
+        len = recv(m_Client, buffer, buffer_size, 0);
+        cout<<buffer<<endl;
+        cout<<len<<endl;
+
+        closesocket(m_Client);     
     WSACleanup();
     return 0;
     
