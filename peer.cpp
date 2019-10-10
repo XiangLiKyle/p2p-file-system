@@ -112,12 +112,12 @@ void init_request(int request_num)
 		len = server.Recv(m_server,recv_buffer);
 		SplitString(recv_buffer,sp," ");
 		int recv_file_num = atoi(sp[0].c_str());
-		string recv_file_name;
-		int recv_file_size;
+		string recv_file_name[recv_file_num];
+		int recv_file_size[recv_file_num];
 		for(int i = 1; i <= recv_file_num; i++)
 		{
-			recv_file_name = sp[i*2-1];
-			recv_file_size = atoi(sp[i*2].c_str());
+			recv_file_name[i-1] = sp[i*2-1];
+			recv_file_size[i-1] = atoi(sp[i*2].c_str());
 		}
 		//next step
 
@@ -135,16 +135,12 @@ void init_request(int request_num)
 		len = server.Recv(m_server,recv_buffer);
 		SplitString(recv_buffer,sp," ");
 		int recv_tmplist_size = atoi(sp[0].c_str);
-		int recv_end_point;
-		int recv_chunknum[strlen(sp)][10001];
+		string recv_ips;
+		int recv_ports;
 		for(int i = 1; i <= recv_tmplist_size; i++)
 		{
-			recv_end_point = atoi(sp[i*2-1].c_str());
-			for(int j = 0; j < strlen(sp[i*2]); j++)
-			{
-				recv_chunknum[i-1][j] = sp[i*2][j];
-			}
-
+			recv_ips[i-1] = sp[i*2-1];;
+			recv_ports[i-1] = atoi(sp[i*2].c_str());
 		}
 
 
