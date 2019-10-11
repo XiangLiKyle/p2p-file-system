@@ -41,9 +41,18 @@ string temp_chunk_list[MAX_FILE_NUM];
 int temp_file_length[MAX_FILE_NUM];
 string temp_message[MAX_FILE_NUM];
 
+string recv_file_name[MAX_FILE_NUM];
+int recv_file_size[MAX_FILE_NUM];
+int recv_file_num;
+string recv_ips[MAX_FILE_NUM];
+int recv_ports[MAX_FILE_NUM];
+int recv_tmplist_size;
+
 int temp_file_num;
 string local_file_path = ".\\files";
 string local_chunk_path = ".\\chunks";
+
+bool marker = true;
 
 
 struct register_requset
@@ -57,7 +66,7 @@ struct register_requset
 
 struct file_location_request
 {
-	char file_name[MAX_FILE_NAME];
+	string file_name;
 };
 
 struct chunk_register_request
@@ -147,10 +156,8 @@ void init_request(int request_num, SOCKET target)
 		len = recv(target,recv_buffer,buffer_size,0);
 
 		SplitString(recv_buffer,sp," ");
-		int recv_file_num = atoi(sp[0].c_str());
+		recv_file_num = atoi(sp[0].c_str());
 
-		string recv_file_name[recv_file_num];
-		int recv_file_size[recv_file_num];
 		for(int i = 1; i <= recv_file_num; i++)
 		{
 			recv_file_name[i-1] = sp[i*2-1];
@@ -165,22 +172,35 @@ void init_request(int request_num, SOCKET target)
 
 	if(request_num == 3)
 	{
+		cout << "Choose a file to download:" << endl;
+		string put_in;
+		cin >> put_in;
 		//SOCKET target;
+		flr.file_name = put_in;
 		cout << "File location requested!" << endl;
-		total_message = sprintf(num_buffer,"%d%s",request_num," ");
-		total_message += sprintf(num_buffer + total_message, "%d%s",flr.file_name," ");
+		total_message = sprintf(num_buffer,"%d ",request_num);
+		total_message += sprintf(num_buffer + total_message, "%s ",flr.file_name.c_str());
 		send(target,num_buffer,total_message,0);
+		cout<<"!!!!"<<endl;
 
 		//receive file
 		len = recv(target,recv_buffer,buffer_size,0);
 		SplitString(recv_buffer,sp," ");
-		int recv_tmplist_size = atoi(sp[0].c_str());
-		string recv_ips[MAX_FILE_NUM];
-		int recv_ports[MAX_FILE_NUM];
+		recv_tmplist_size = atoi(sp[0].c_str());
+		int k = 1;
 		for(int i = 1; i <= recv_tmplist_size; i++)
 		{
-			recv_ips[i-1] = sp[i*2-1];
-			recv_ports[i-1] = atoi(sp[i*2].c_str());
+			cout << "endpoint " << i-1 << endl;
+			recv_ips[i-1] = sp[k];
+			recv_ports[i-1] = atoi(sp[k+1].c_str());
+			recv_chunk_num[i-1] = atoi(sp[k+2].c_str());
+			cout << recv_ips[i-1] << " " << recv_ports[i-1] <<" " recv_chunk_num[i-1]<<endl;
+			for(int j = 0; j < recv_chunk_num[i-1]; j++)
+			{
+				recv_chunks[j] = sp[k+3+j];
+				cout << recv_chunks[j] << " ";
+			}
+			k = k+3+j+1;
 		}
 	}
 
@@ -203,6 +223,7 @@ void init_request(int request_num, SOCKET target)
 	if(request_num == 5)
 	{
 		//SOCKET target;
+
 		cout << "File chunk requested!" << endl;
 		total_message = sprintf(num_buffer,"%d%s",request_num," ");
 		total_message += sprintf(num_buffer + total_message, "%s%s%d%s",fcr.file_name," ",fcr.chunk_num," ");
@@ -267,6 +288,7 @@ void file_splitter(string file_name)
 	if(!fsin)
 	{
 		cout << "Invalid file name" << endl;
+		marker = false;
 		return;
 	}
 	fsin.seekg(0,ios::end);
@@ -442,9 +464,19 @@ void regist_prepare()
 		cout << "Print the file name you want to regist, if you do not want to regist, print NO:" << endl;
 		cin >> put_in;
 		new_file = put_in;
+		if(put_in == "NO")
+		{
+			break;
+		}
 
 		file_splitter(put_in);
 
+		if(marker == false)
+		{
+			marker = true;
+			continue;
+		}
+	
 		//closesocket(target);
 		SOCKET target;
     	target = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -502,12 +534,6 @@ void ask_request()
 	closesocket(target);
 
 
-	string put_in;
-	cout << "Choose a file to download:" << endl;
-	cin >> put_in;
-
-
-	//SOCKET target;
     target = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if(connect(target, (sockaddr *)&serAddr, sizeof(serAddr)) == SOCKET_ERROR)
     {  //连接失败 
@@ -545,7 +571,7 @@ int main()
 	HANDLE LThread;
 	DWORD  threadIdL;
 	LThread = CreateThread(NULL, 0, ThreadListen, NULL, 0,&threadIdL);
-
+	marker = true;
 
 	//request
     cout << "Request number:" << endl;
@@ -563,19 +589,7 @@ int main()
         	printf("invalid socket!");
         	return 0;
     	}
-        
-    	// char buffer [1024];
-     //    //buffer = "3 file1 321 file2 3331"
-    	// sockaddr_in serAddr;
-    	// serAddr.sin_family = AF_INET;
-    	// serAddr.sin_port = htons(7777);
-    	// serAddr.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
-    	// if(connect(target, (sockaddr *)&serAddr, sizeof(serAddr)) == SOCKET_ERROR)
-    	// {  //连接失败 
-     //   		printf("connect error !");
-     //    	closesocket(target);
-     //    	return 0;
-    	// }
+
     	if(request_num == 1)
     	{
     		regist_prepare();
