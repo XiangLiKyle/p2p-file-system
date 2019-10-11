@@ -18,7 +18,7 @@ using namespace std;
 #define MAX_CHUNK 100
 #define MAX_TOTAL_MESSAGE 20000
 
-const int local_port = 7777;
+const int local_port = 10020;
 const int buffer_size = 1024;
 
 map<string, int> filemap;
@@ -307,16 +307,28 @@ void file_assembler(string file_name,int file_num)
 	delete [] chunk_last;
 }
 
-void handle(Server_socket server, int request_peer)
+struct upload
+{
+	Server_socket* server;
+	int request_peer;
+};
+
+ofstream f("listen.log");
+
+DWORD WINAPI Threadhandle(LPVOID pParam)
 {	
+	upload *ul = (upload *)pParam;
+
 	char recv_msg[buffer_size];
-	cout << "File Chunk Request received!" << endl;
 	int len;
-	len = server.Recv(request_peer,recv_msg);
+
+	len = ul->server->Recv(ul->request_peer, recv_msg);
 	SplitString(recv_msg,sp," ");
 	string request_file_name = sp[1];
 	int request_chunk = atoi(sp[2].c_str());
 	
+	f<<request_file_name<<" chunk:"<<request_chunk<<endl;
+
 	//send chunk
 	char buffer[buffer_size];
 
@@ -329,20 +341,60 @@ void handle(Server_socket server, int request_peer)
 	ifstream srcFile;
 	srcFile.open(actual_file_name, ios::binary);
 	if(!srcFile)
-		return;
+	{
+		f<< "No File Chunk!" << endl;
+		return 1;
+	}
 	
 	while(!srcFile.eof())
 	{
 		srcFile.read(buffer, buffer_size);
 		readlen = srcFile.gcount();
-		send(request_peer, buffer, readlen, 0);
+		send(ul->request_peer, buffer, readlen, 0);
 		havesend += readlen;	
 	}
+	
+	f<< "File Chunk send!" << endl;
 
 	srcFile.close();
-
 }
 
+DWORD WINAPI ThreadListen(LPVOID pParam)
+{
+    Server_socket server(local_port);
+    server.Start_listen();
+
+	sockaddr_in remoteAddr;  
+	int nAddrlen = sizeof(remoteAddr);  
+	char revData[255];   
+	SOCKET Client; 
+
+	while(1)  
+	{  
+		f<<"Backend Listening"<<endl;  
+		Client = accept(server.server, (SOCKADDR *)&remoteAddr, &nAddrlen);
+		if(Client == INVALID_SOCKET)  
+		{  
+			f<<"Socket Error!"<<endl;  
+			continue;  
+		}  
+
+		f<<"Connection received: "<<inet_ntoa(remoteAddr.sin_addr)<<endl;
+		f<< "File Chunk Request received!" << endl;
+		
+		upload* ul = new upload;
+		
+		ul->server = &server;
+		ul->request_peer = Client;
+
+		HANDLE hThread;
+		DWORD  threadId;
+		hThread = CreateThread(NULL, 0, Threadhandle, ul, 0, &threadId);
+		closesocket(Client);
+	}
+
+    return 0;
+}
 
 int main()
 {
@@ -365,28 +417,11 @@ int main()
     {
         return 0;
     }
-    Server_socket server(local_port);
-    server.Start_listen();
-    sockaddr_in remoteAddr;  
-	int nAddrlen = sizeof(remoteAddr);  
-	char revData[255];   
-	SOCKET Client; 
-	int len;
-	string type;
-	while(1)  
-	{  
-		printf("Start Listening\n");  
-		Client = accept(server.server, (SOCKADDR *)&remoteAddr, &nAddrlen);
-		if(Client == INVALID_SOCKET)  
-		{  
-			printf("Socket Error!");  
-			continue;  
-		}  
+		
+	HANDLE LThread;
+	DWORD  threadIdL;
+	LThread = CreateThread(NULL, 0, ThreadListen, NULL, 0,&threadIdL);
 
-		printf("Connection received: %s \n", inet_ntoa(remoteAddr.sin_addr));
-		handle(server,Client);
-		closesocket(Client);
-	}
 
 	//request
     cout << "Request number:" << endl;

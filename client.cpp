@@ -30,10 +30,12 @@ int main()
         
         char buffer [1024];
         //buffer = "3 file1 321 file2 3331"
-        sockaddr_in serAddr;
+        sockaddr_in serAddr, my_addr;
         serAddr.sin_family = AF_INET;
         serAddr.sin_port = htons(7777);
         serAddr.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
+        
+
         if(connect(m_Client, (sockaddr *)&serAddr, sizeof(serAddr)) == SOCKET_ERROR)
         {  //连接失败 
             printf("connect error !");
@@ -42,7 +44,7 @@ int main()
         }
         //RecvFile();
         int buffer_size = 1024;
-        send(m_Client, "1 ", 2, 0);
+        send(m_Client, "1 127.0.0.1 11000 ", 18, 0);
         send(m_Client, "2 ", 2, 0);
         send(m_Client, "file1 321 file2 20248881", 25, 0);
 

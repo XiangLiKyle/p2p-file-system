@@ -57,15 +57,18 @@ DWORD WINAPI ThreadRun(LPVOID pParam)
 
 	if(con->sp[0] == "1") //Register Request
 	{
-		int num = atoi(con->sp[1].c_str());
+        string ip = con->sp[1];
+        int port = atoi(con->sp[2].c_str());
+
+		int num = atoi(con->sp[3].c_str());
 
 		string filename;
 		int filesize, filenum, chunk_num;
 
 		for(int i = 1; i <= num; i++)
 		{
-		 filename = con->sp[i * 2];
-		 filesize = atoi(con->sp[i * 2 + 1].c_str());
+		 filename = con->sp[i * 2 + 2];
+		 filesize = atoi(con->sp[i * 2 + 3].c_str());
 
 			if(filemap.find(filename) == filemap.end())
 			{
@@ -88,7 +91,7 @@ DWORD WINAPI ThreadRun(LPVOID pParam)
 			for(int j = 0; j < chunk_num; j++)
 			{
 				vector<pair<string, int>> loc;
-				loc.push_back(make_pair(inet_ntoa(con->Addr.sin_addr), con->Addr.sin_port));
+				loc.push_back(make_pair(ip, port));
 				chunk_loc.push_back(loc);
 			}
 		}
@@ -192,7 +195,7 @@ int main()
 			continue;  
 		}  
 
-		printf("Connection received: %s \n", inet_ntoa(remoteAddr.sin_addr));  
+		printf("Connection received: %s:%d\n", inet_ntoa(remoteAddr.sin_addr), remoteAddr.sin_port);  
 
 		Connection* con = new Connection;
 		con->Client = Client;
