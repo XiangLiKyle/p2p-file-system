@@ -119,26 +119,45 @@ DWORD WINAPI ThreadRun(LPVOID pParam)
 	if(con->sp[0] == "3") //file location
 	{
 		string name = con->sp[1];
-		vector<pair<string, int>> tmplist;
+		vector<pair<string, int>> peerlist;
+        vector<vector<int>> chunkid;
+
 		int num = filemap[name];
 		int st = chunkstart[num];
 		int chunk_num = file2chunk[num];
 
 		for(int i = 0; i < chunk_num; i++)
 			for(int j = 0; j < chunk_loc[i + st].size(); j++)
-				tmplist.push_back(chunk_loc[i + st][j]);
-		
-		sort(tmplist.begin(), tmplist.end());
-		tmplist.erase(unique(tmplist.begin(), tmplist.end()), tmplist.end());
+            {
+                int k;
+                for(k = 0; k < peerlist.size(); k++)
+                    if(peerlist[k] == chunk_loc[i + st][j])
+                    {
+                        chunkid[k].push_back(i);
+                        break;
+                    }
 
+                if(k == peerlist.size())
+                {
+                    peerlist.push_back(chunk_loc[i + st][j]);
+                    vector<int> v;
+                    v.push_back(i);
+                    chunkid.push_back(v);
+                }
+            }
+		
 		char buffer[1024];
 		int len;
 
-		len = sprintf(buffer,"%d ",tmplist.size());
-		for(int i = 0; i < tmplist.size(); i++)
-			len += sprintf(buffer + len,"%s %d ", tmplist[i].first.c_str(), tmplist[i].second);
+		len = sprintf(buffer,"%d ",peerlist.size());
+		for(int i = 0; i < peerlist.size(); i++)
+        {
+			len += sprintf(buffer + len,"%s %d %d ", peerlist[i].first.c_str(), peerlist[i].second, chunkid[i].size());
+            for(int j = 0; j < chunkid[i].size(); j++)
+                len += sprintf(buffer + len,"%d ", chunkid[i][j]);
+        }
 		        
-        printf("Get %d servers for file\n", tmplist.size());
+        printf("Get %d servers for file\n", peerlist.size());
 
 		con->server->Send(con->Client, buffer, len);
 	}
