@@ -42,8 +42,8 @@ int temp_file_length[MAX_FILE_NUM];
 string temp_message[MAX_FILE_NUM];
 
 int temp_file_num;
-string local_file_path = "D:\\work\\psu\\distributed system\\project1\\backup\\files";
-string local_chunk_path = "D:\\work\\psu\\distributed system\\project1\\backup\\chunks";
+string local_file_path = ".\\files";
+string local_chunk_path = ".\\chunks";
 
 
 struct register_requset
@@ -112,7 +112,7 @@ void init_request(int request_num, SOCKET target)
 		//SOCKET target;
 		rr.file_num = 1;
 		cout<<"Register requseted"<<endl;
-		total_message = sprintf(num_buffer,"%d %s",request_num," ");
+		total_message = sprintf(num_buffer,"%d ",request_num);
 		total_message += sprintf(num_buffer + total_message, "%d%s",rr.file_num," ");
 		//for(int i = 0; i < peer_file_num; i++)
 		//{
@@ -121,8 +121,8 @@ void init_request(int request_num, SOCKET target)
 		//}
 		rr.file_name = new_file;
 		rr.file_length = new_file_length;
-		total_message += sprintf(num_buffer + total_message,"%s%s%d%s",rr.file_name," ",rr.file_length," ");
-		total_message += sprintf(num_buffer + total_message,"%s%s%d%s",local_IP," ",local_port," ");
+		total_message += sprintf(num_buffer + total_message,"%s%s%d%s",rr.file_name.c_str()," ",rr.file_length," ");
+		total_message += sprintf(num_buffer + total_message,"%s%s%d%s",local_IP.c_str()," ",local_port," ");
 		send(target,num_buffer,total_message,0);
 
 
@@ -140,7 +140,7 @@ void init_request(int request_num, SOCKET target)
 	{
 		//SOCKET target;
 		cout << "File list requested!" << endl;
-		total_message = sprintf(num_buffer,"%d%s",request_num," ");
+		total_message = sprintf(num_buffer,"%d ",request_num);
 		send(target,num_buffer,2,0);
 
 		//receieve message
@@ -424,7 +424,7 @@ DWORD WINAPI ThreadListen(LPVOID pParam)
     return 0;
 }
 
-void regist_prepare(SOCKET target)
+void regist_prepare()
 {
 	string put_in;
 	dir(local_file_path);
@@ -445,7 +445,6 @@ void regist_prepare(SOCKET target)
 
 		file_splitter(put_in);
 
-		init_request(1,target);
 		//closesocket(target);
 		SOCKET target;
     	target = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -468,15 +467,18 @@ void regist_prepare(SOCKET target)
             return;
         }
 
+        init_request(1,target);
+
+
 		
 	}while(put_in != "NO");
 	//init_request(1,target);
 	 
 }
 
-void ask_request(SOCKET target)
+void ask_request()
 {
-	//SOCKET target;
+	SOCKET target;
     target = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if(target == INVALID_SOCKET)
     {
@@ -562,27 +564,27 @@ int main()
         	return 0;
     	}
         
-    	char buffer [1024];
-        //buffer = "3 file1 321 file2 3331"
-    	sockaddr_in serAddr;
-    	serAddr.sin_family = AF_INET;
-    	serAddr.sin_port = htons(7777);
-    	serAddr.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
-    	if(connect(target, (sockaddr *)&serAddr, sizeof(serAddr)) == SOCKET_ERROR)
-    	{  //连接失败 
-       		printf("connect error !");
-        	closesocket(target);
-        	return 0;
-    	}
+    	// char buffer [1024];
+     //    //buffer = "3 file1 321 file2 3331"
+    	// sockaddr_in serAddr;
+    	// serAddr.sin_family = AF_INET;
+    	// serAddr.sin_port = htons(7777);
+    	// serAddr.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
+    	// if(connect(target, (sockaddr *)&serAddr, sizeof(serAddr)) == SOCKET_ERROR)
+    	// {  //连接失败 
+     //   		printf("connect error !");
+     //    	closesocket(target);
+     //    	return 0;
+    	// }
     	if(request_num == 1)
     	{
-    		regist_prepare(target);
+    		regist_prepare();
 
     	}
 
     	if(request_num == 2)
     	{
-    		ask_request(target);
+    		ask_request();
     	}
     }
 

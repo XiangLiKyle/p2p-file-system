@@ -57,19 +57,21 @@ DWORD WINAPI ThreadRun(LPVOID pParam)
 
 	if(con->sp[0] == "1") //Register Request
 	{
-        string ip = con->sp[1];
-        int port = atoi(con->sp[2].c_str());
+        int size = con->sp.size();
 
-		int num = atoi(con->sp[3].c_str());
-
+        string ip = con->sp[size - 2];
+        int port = atoi(con->sp[size - 1].c_str());
+		int num = atoi(con->sp[1].c_str());
+        cout<<num<<endl;
 		string filename;
 		int filesize, filenum, chunk_num;
 
 		for(int i = 1; i <= num; i++)
 		{
-		 filename = con->sp[i * 2 + 2];
-		 filesize = atoi(con->sp[i * 2 + 3].c_str());
+		    filename = con->sp[i * 2];
+		    filesize = atoi(con->sp[i * 2 + 1].c_str());
 
+            cout<<filename<<" "<<filesize<<endl;
 			if(filemap.find(filename) == filemap.end())
 			{
 				filemap[filename] = filesum;
@@ -204,6 +206,7 @@ int main()
 
 		len = server.Recv(Client, buffer);
 		type = buffer;
+
 		type = type.substr(0, len);
 		cout<<type<<endl;
 

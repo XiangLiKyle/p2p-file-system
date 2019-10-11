@@ -44,9 +44,9 @@ int main()
         }
         //RecvFile();
         int buffer_size = 1024;
-        send(m_Client, "1 127.0.0.1 11000 ", 18, 0);
+        send(m_Client, "1 ", 2, 0);
         send(m_Client, "2 ", 2, 0);
-        send(m_Client, "file1 321 file2 20248881", 25, 0);
+        send(m_Client, "file1 321 file2 20248881 127.0.0.1 11000", 40, 0);
 
         int len = recv(m_Client, buffer, buffer_size, 0);
         cout<<buffer<<endl;
