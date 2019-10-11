@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <winsock2.h>
+#include <string>
 #include <map>
 #include <io.h>
 #include "serversocket.h"
@@ -20,6 +21,7 @@ using namespace std;
 
 const int local_port = 10020;
 const int buffer_size = 1024;
+const int chunk_size = 1024 * 1024;
 const string local_IP = "127.0.0.1";
 
 map<string, int> filemap;
@@ -47,6 +49,8 @@ int recv_file_num;
 string recv_ips[MAX_FILE_NUM];
 int recv_ports[MAX_FILE_NUM];
 int recv_tmplist_size;
+int recv_chunk_num[MAX_FILE_NUM];
+int recv_chunks[MAX_FILE_NUM];
 
 int temp_file_num;
 string local_file_path = ".\\files";
@@ -100,6 +104,209 @@ void SplitString(const string& s, vector<std::string>& v, const string& c)
 	v.push_back(s.substr(pos1));
 }
 
+
+
+void file_assembler(string file_name,int file_num)
+{
+	fstream fain,faout;
+	string temp_chunk;
+	faout.open((local_file_path + "\\" + file_name).c_str(),ios::out|ios::binary);
+
+	char num[10];
+	char chunk_in[chunk_size];
+	for(int i = 0; i < file_num - 1; i++)
+	{
+		itoa(i,num,10);
+		temp_chunk = local_chunk_path + "\\" + file_name + "#" + num;
+		fain.open(temp_chunk.c_str(),ios::in|ios::binary);
+		fain.read(chunk_in,sizeof(chunk_in));
+		faout.write(chunk_in,sizeof(chunk_in));
+		fain.close();
+	}
+	delete [] chunk_in;
+
+	itoa(file_num - 1,num,10);
+	temp_chunk = local_chunk_path + "\\" + file_name + "#" + num;
+	fain.open(temp_chunk.c_str(),ios::in|ios::binary);
+	fain.seekg(0,ios::end);
+	int endchunk = fain.tellg();
+	fain.seekg(0,ios::beg);
+
+	char chunk_last[endchunk];
+	fain.read(chunk_last,sizeof(chunk_last));
+	faout.write(chunk_last,sizeof(chunk_last));
+	fain.close();
+	faout.close();
+	delete [] chunk_last;
+}
+
+struct Download
+{
+	string file_name;
+	int chunk_num;
+	vector<vector<pair<string,int>>> chunkpeer;
+	int chunk_down[MAX_CHUNK] = {0};
+	int downchunknum = 0;
+};
+
+vector<Download*> Downloads;
+struct ChunkDownload
+{
+	Download* dl;
+	string file_name;
+	int chunk_name;
+	vector<pair<string,int>> peerlist;
+};
+
+DWORD WINAPI ThreadDownloadChunk(LPVOID pParam)
+{
+	ChunkDownload *cdown = (ChunkDownload *)pParam;
+	char num_buffer[buffer_size];
+	char buffer[buffer_size];
+	bool success = 0;
+
+	cout << "File chunk " << cdown->chunk_name <<" requested!" << endl;
+
+	SOCKET target = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    
+    sockaddr_in serAddr;
+    serAddr.sin_family = AF_INET;
+
+	while(1)
+	{
+
+		for(int i = 0; i < cdown->peerlist.size(); i++)
+		{
+			int total_message = 0;
+			total_message = sprintf(num_buffer, "1 %s %d",cdown->file_name.c_str(),cdown->chunk_name);
+			
+		    serAddr.sin_port = htons(cdown->peerlist[i].second);
+		    serAddr.sin_addr.S_un.S_addr = inet_addr(cdown->peerlist[i].first.c_str());
+
+	        if(connect(target, (sockaddr *)&serAddr, sizeof(serAddr)) == SOCKET_ERROR)
+	        {
+	            printf("%d %s %d target error !\n",cdown->chunk_name, cdown->peerlist[i].first.c_str(), cdown->peerlist[i].second);
+	            closesocket(target);
+	            continue;
+	        }
+
+			send(target, num_buffer, total_message, 0);
+			int len = recv(target, buffer, buffer_size, 0);
+
+			if(buffer[0] == '0')//choked
+			{
+	            printf("%d %s %d target choked !\n",cdown->chunk_name, cdown->peerlist[i].first.c_str(), cdown->peerlist[i].second);
+	            closesocket(target);
+	            continue;
+			}
+
+			// closesocket(target);
+			// target = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+			// connect(target, (sockaddr *)&serAddr, sizeof(serAddr));
+
+			// total_message = sprintf(num_buffer, "2 %s %d",cdown->file_name.c_str(),cdown->chunk_name);
+			// send(target, num_buffer, total_message, 0);
+
+
+			//receive file
+			printf("%d %s %d Start receive chunk !\n",cdown->chunk_name, cdown->peerlist[i].first.c_str(), cdown->peerlist[i].second);
+
+			char file_buffer[buffer_size] = {0};
+			int readLen = 0;
+	    	string desFileName = local_chunk_path + "\\" + cdown->file_name + "#" + to_string(cdown->chunk_name);
+	    	ofstream desFile;
+	    	desFile.open(desFileName.c_str(), ios::binary);
+
+	    	while(1)
+	    	{
+	        	readLen = recv(target,file_buffer,buffer_size, 0);
+	        	if (readLen == 0)
+	            	break;
+	        	else
+	            	desFile.write(file_buffer, readLen);
+	    	}
+	    	success = 1;
+	    	desFile.close();
+			break;
+		}
+
+		if(success == 1)
+			break;
+		Sleep(5000);
+	}
+
+	cdown->dl->downchunknum++;
+
+	cout << "Chunk register requested!" << endl;
+	char request_buffer[buffer_size];
+
+	int total = sprintf(request_buffer,"4 ");
+	total += sprintf(request_buffer + total, "%s %d %s %d",local_IP.c_str(),local_port,cdown->file_name.c_str(),cdown->chunk_name);
+	
+
+	SOCKET servertarget;
+	servertarget = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+
+    char recv_buffer[1024];
+
+    sockaddr_in serverAddr;
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_port = htons(7777);
+    serverAddr.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
+	connect(servertarget, (sockaddr *)&serverAddr, sizeof(serverAddr));
+
+
+	send(servertarget, request_buffer,total,0);
+	int len0 = recv(servertarget,recv_buffer,buffer_size,0);
+	if(recv_buffer == "1")
+		cout << "Chunk register success!" << endl;
+
+	return 1;
+}
+
+DWORD WINAPI ThreadDownloadFile(LPVOID pParam)
+{
+	Download *dl = (Download *)pParam;
+	for(int i = 0; i < dl->chunk_num; i++)
+	{
+		int minnum = -1;
+		for(int j = 0; j < dl->chunk_num; j++)
+			if(dl->chunk_down[j] == 0)
+			{
+				minnum = j;
+				break;
+			}
+
+		if(minnum == -1)
+			break;
+
+		for(int j = 1; j < dl->chunk_num; j++)
+			if(dl->chunk_down[j] == 0 && dl->chunkpeer[j].size() < dl->chunkpeer[minnum].size())
+				minnum = j;
+		
+		ChunkDownload* cdown = new ChunkDownload;
+		cdown->peerlist = dl->chunkpeer[minnum];
+		cdown->file_name = dl->file_name;
+		cdown->chunk_name = minnum;
+		cdown->dl = dl;
+		dl->chunk_down[minnum] = 1;
+
+		HANDLE CThread;
+		DWORD  threadId;
+		CThread = CreateThread(NULL, 0, ThreadDownloadChunk, cdown, 0, &threadId);
+	}
+
+	while(1)
+	{
+		if(dl->chunk_num == dl->downchunknum)
+		{
+			file_assembler(dl->file_name, dl->chunk_num);
+			break;
+		}
+	}
+
+	return 1;
+}
 
 void init_request(int request_num, SOCKET target)
 {
@@ -184,77 +391,43 @@ void init_request(int request_num, SOCKET target)
 		cout<<"!!!!"<<endl;
 
 		//receive file
+		Download* newdown = new Download;
+		newdown->file_name = flr.file_name;
+
 		len = recv(target,recv_buffer,buffer_size,0);
 		SplitString(recv_buffer,sp," ");
 		recv_tmplist_size = atoi(sp[0].c_str());
-		int k = 1;
+		newdown->chunk_num = atoi(sp[1].c_str());
+
+		for(int i = 0; i < newdown->chunk_num; i++)
+		{
+			vector<pair<string,int>> v;
+			newdown->chunkpeer.push_back(v);
+		}
+
+		int k = 2;
 		for(int i = 1; i <= recv_tmplist_size; i++)
 		{
 			cout << "endpoint " << i-1 << endl;
 			recv_ips[i-1] = sp[k];
 			recv_ports[i-1] = atoi(sp[k+1].c_str());
 			recv_chunk_num[i-1] = atoi(sp[k+2].c_str());
-			cout << recv_ips[i-1] << " " << recv_ports[i-1] <<" " recv_chunk_num[i-1]<<endl;
+			cout << recv_ips[i-1] << " " << recv_ports[i-1] <<" " << recv_chunk_num[i-1]<<endl;
 			for(int j = 0; j < recv_chunk_num[i-1]; j++)
 			{
-				recv_chunks[j] = sp[k+3+j];
-				cout << recv_chunks[j] << " ";
+				int nowchunk = atoi(sp[k+3+j].c_str());
+				newdown->chunkpeer[nowchunk].push_back(make_pair(recv_ips[i-1],recv_ports[i-1]));
+				cout << nowchunk << " ";
 			}
-			k = k+3+j+1;
+			k = k + 3 + recv_chunk_num[i-1];
+			cout<<endl;
 		}
+
+		Downloads.push_back(newdown);
+		HANDLE DThread;
+		DWORD  threadId;
+		DThread = CreateThread(NULL, 0, ThreadDownloadFile, newdown, 0, &threadId);
 	}
-
-	if(request_num == 4)
-	{
-		//SOCKET target;
-		cout << "Chunk register requested!" << endl;
-		total_message = sprintf(num_buffer,"%d%s",request_num," ");
-		total_message += sprintf(num_buffer + total_message, "%s%s%d%s",crr.file_name," ",crr.chunk_num," ");
-		send(target,num_buffer,total_message,0);
-
-		len = recv(target,recv_buffer,buffer_size,0);
-		if(recv_buffer == "1")
-		{
-			cout << "Chunk register success!" << endl;
-		}
-	}
-
-
-	if(request_num == 5)
-	{
-		//SOCKET target;
-
-		cout << "File chunk requested!" << endl;
-		total_message = sprintf(num_buffer,"%d%s",request_num," ");
-		total_message += sprintf(num_buffer + total_message, "%s%s%d%s",fcr.file_name," ",fcr.chunk_num," ");
-		send(target,num_buffer,total_message,0);
-
-		//receive file
-		cout << "Start receive files!" << endl;
-		char file_buffer[buffer_size] = {0};
-		int readLen = 0;
-    	string desFileName = "peer_new_in";
-    	ofstream desFile;
-    	desFile.open(desFileName.c_str(), ios::binary);
-    	if (!desFile)
-    	{
-        	return ;
-    	}
-    	do 
-    	{
-        	readLen = recv(target,file_buffer,buffer_size, 0);
-        	if (readLen == 0)
-        	{
-            	break;
-        	}
-        	else
-        	{
-            	desFile.write(file_buffer, readLen);
-        	}
-    	} while(true);
-    	desFile.close();
-	}
-
 }
 
 void dir(string path)
@@ -295,9 +468,9 @@ void file_splitter(string file_name)
 	int file_size = fsin.tellg();
 	new_file_length = file_size;
 	fsin.seekg(0,ios::beg);
-	int chunks = file_size / buffer_size + 1;
+	int chunks = file_size / chunk_size + 1;
 	char num[10];
-	char chunk_in[buffer_size];
+	char chunk_in[chunk_size];
 	for(int i = 0; i < chunks - 1; i++)
 	{
 		itoa(i,num,10);
@@ -311,7 +484,7 @@ void file_splitter(string file_name)
 	cout << "n-1!" << endl;
 	delete [] chunk_in;
 
-	int endchunk = file_size - buffer_size*(chunks-1);
+	int endchunk = file_size - chunk_size*(chunks-1);
 	itoa(chunks - 1,num,10);
 	temp_chunk = local_chunk_path + "/" + file_name + "#" + num;
 	//new_chunk_list[num] = file_name + "#" + num;
@@ -323,61 +496,30 @@ void file_splitter(string file_name)
 	delete [] chunk_last;
 }
 
-void file_assembler(string file_name,int file_num)
-{
-	fstream fain,faout;
-	string temp_chunk;
-	faout.open((local_file_path + file_name).c_str(),ios::out|ios::binary);
-
-	char num[10];
-	char chunk_in[buffer_size];
-	for(int i = 0; i < file_num - 1; i++)
-	{
-		itoa(i,num,10);
-		temp_chunk = local_chunk_path + file_name + "#" + num;
-		fain.open(temp_chunk.c_str(),ios::in|ios::binary);
-		fain.read(chunk_in,sizeof(chunk_in));
-		faout.write(chunk_in,sizeof(chunk_in));
-		fain.close();
-	}
-	delete [] chunk_in;
-
-	itoa(file_num - 1,num,10);
-	temp_chunk = local_chunk_path + file_name + "#" + num;
-	fain.open(temp_chunk.c_str(),ios::in|ios::binary);
-	fain.seekg(0,ios::end);
-	int endchunk = fain.tellg();
-	fain.seekg(0,ios::beg);
-
-	char chunk_last[endchunk];
-	fain.read(chunk_last,sizeof(chunk_last));
-	faout.write(chunk_last,sizeof(chunk_last));
-	fain.close();
-	faout.close();
-	delete [] chunk_last;
-}
 
 struct upload
 {
 	Server_socket* server;
 	int request_peer;
+	string request_file_name;
+	int request_chunk;
 };
 
 ofstream f("listen.log");
+HANDLE hMutex = NULL;
 
 DWORD WINAPI Threadhandle(LPVOID pParam)
 {	
 	upload *ul = (upload *)pParam;
-
 	char recv_msg[buffer_size];
 	int len;
+	sockaddr_in remoteAddr;  
+	int nAddrlen = sizeof(remoteAddr);  
+	char revData[255];   
 
-	len = ul->server->Recv(ul->request_peer, recv_msg);
-	SplitString(recv_msg,sp," ");
-	string request_file_name = sp[1];
-	int request_chunk = atoi(sp[2].c_str());
+
 	
-	f<<request_file_name<<" chunk:"<<request_chunk<<endl;
+	f<<ul->request_file_name<<" chunk:"<<ul->request_chunk<<endl;
 
 	//send chunk
 	char buffer[buffer_size];
@@ -387,7 +529,7 @@ DWORD WINAPI Threadhandle(LPVOID pParam)
 
 	string actual_file_name;
 
-	actual_file_name = request_file_name + "#" + sp[2];
+	actual_file_name = local_chunk_path +  "\\" + ul->request_file_name + "#" + to_string(ul->request_chunk);
 	ifstream srcFile;
 	srcFile.open(actual_file_name, ios::binary);
 	if(!srcFile)
@@ -400,12 +542,16 @@ DWORD WINAPI Threadhandle(LPVOID pParam)
 	{
 		srcFile.read(buffer, buffer_size);
 		readlen = srcFile.gcount();
-		send(ul->request_peer, buffer, readlen, 0);
+
+
+		ul->server->Send(ul->request_peer, buffer, readlen);
+
+
 		havesend += readlen;	
 	}
 	
 	f<< "File Chunk send!" << endl;
-
+	closesocket(ul->request_peer);
 	srcFile.close();
 }
 
@@ -413,12 +559,15 @@ DWORD WINAPI ThreadListen(LPVOID pParam)
 {
     Server_socket server(local_port);
     server.Start_listen();
+    vector<string> fstring;
 
 	sockaddr_in remoteAddr;  
 	int nAddrlen = sizeof(remoteAddr);  
 	char revData[255];   
 	SOCKET Client; 
-
+	hMutex = CreateMutex(NULL, FALSE, "server receive");
+	
+	DWORD  threadId = 0;
 	while(1)  
 	{  
 		f<<"Backend Listening"<<endl;  
@@ -429,22 +578,41 @@ DWORD WINAPI ThreadListen(LPVOID pParam)
 			continue;  
 		}  
 
-		f<<"Connection received: "<<inet_ntoa(remoteAddr.sin_addr)<<endl;
+		f<<"Connection received: "<<inet_ntoa(remoteAddr.sin_addr)<<":"<<remoteAddr.sin_port<<endl;
 		f<< "File Chunk Request received!" << endl;
 		
 		upload* ul = new upload;
+
+
+		char recv_msg[1024];
+
+
+		int len = ul->server->Recv(Client, recv_msg);
+		send(Client, "1", 1,0);
+		
+		// closesocket(Client);
+
+		// Client = accept(ul->server->server, (SOCKADDR *)&remoteAddr, &nAddrlen);
+		// len = ul->server->Recv(Client, recv_msg);
+
+	    string tmp = recv_msg;
+	    tmp = tmp.substr(0,len);
+		SplitString(tmp, fstring, " ");
 		
 		ul->server = &server;
 		ul->request_peer = Client;
+		ul->request_file_name = fstring[1];
+		ul->request_chunk = atoi(fstring[2].c_str());
 
 		HANDLE hThread;
-		DWORD  threadId;
 		hThread = CreateThread(NULL, 0, Threadhandle, ul, 0, &threadId);
-		closesocket(Client);
+		threadId++;
 	}
 
     return 0;
 }
+
+
 
 void regist_prepare()
 {
@@ -574,33 +742,42 @@ int main()
 	marker = true;
 
 	//request
-    cout << "Request number:" << endl;
-    cin >> request_num;
-    if(request_num > 5 && request_num < 1)
-    {
-    	cout << "invalid request" << endl;
-    }
-    else
-    {
-    	SOCKET target;
-    	target = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    	if(target == INVALID_SOCKET)
-    	{
-        	printf("invalid socket!");
-        	return 0;
-    	}
+	while(1)
+	{
+	    cout << "Request number:" << endl;
+	    cin >> request_num;
+	    if(request_num > 5 && request_num < 1)
+	    {
+	    	cout << "invalid request" << endl;
+	    }
+	    else
+	    {
+	    	SOCKET target;
+	    	target = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	    	if(target == INVALID_SOCKET)
+	    	{
+	        	printf("invalid socket!");
+	        	return 0;
+	    	}
 
-    	if(request_num == 1)
-    	{
-    		regist_prepare();
+	    	if(request_num == 1)
+	    	{
+	    		regist_prepare();
 
-    	}
+	    	}
 
-    	if(request_num == 2)
-    	{
-    		ask_request();
-    	}
-    }
+	    	if(request_num == 2)
+	    	{
+	    		ask_request();
+	    	}
+
+	    	if(request_num == 3)
+	    	{
+	    		for(int i = 0; i < Downloads.size(); i++)
+	    			printf("%d. %s %d/%d\n",i + 1, Downloads[i]->file_name.c_str(), Downloads[i]->downchunknum, Downloads[i]->chunk_num);
+	    	}
+	    }
+	}
 
 
 }

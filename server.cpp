@@ -122,6 +122,9 @@ DWORD WINAPI ThreadRun(LPVOID pParam)
 		vector<pair<string, int>> peerlist;
         vector<vector<int>> chunkid;
 
+        peerlist.clear();
+        chunkid.clear();
+
 		int num = filemap[name];
 		int st = chunkstart[num];
 		int chunk_num = file2chunk[num];
@@ -149,7 +152,7 @@ DWORD WINAPI ThreadRun(LPVOID pParam)
 		char buffer[1024];
 		int len;
 
-		len = sprintf(buffer,"%d ",peerlist.size());
+		len = sprintf(buffer,"%d %d ",peerlist.size(), chunk_num);
 		for(int i = 0; i < peerlist.size(); i++)
         {
 			len += sprintf(buffer + len,"%s %d %d ", peerlist[i].first.c_str(), peerlist[i].second, chunkid[i].size());
@@ -163,22 +166,25 @@ DWORD WINAPI ThreadRun(LPVOID pParam)
 	}
 
 	if(con->sp[0] == "4") //Chunk Register Request
-	{
-		 string filename = con->sp[1];
-		 int chunk_id = atoi(con->sp[2].c_str());
-		 int filenum;
+	{        
+        string ip = con->sp[1];
+        int port = atoi(con->sp[2].c_str());
 
-		 if(filemap.find(filename) == filemap.end()) //file not exist
-		 {
-			 printf("Fail Chunk Registration \n");
-			 con->server->Send(con->Client, "0", 1);
-		 }
+        string filename = con->sp[3];
+        int chunk_id = atoi(con->sp[4].c_str());
+        int filenum;
 
-		 filenum = filemap[filename];
-		 int id = chunkstart[filenum] + chunk_id;
-		 chunk_loc[id].push_back(make_pair(inet_ntoa(con->Addr.sin_addr), con->Addr.sin_port));
-		 printf("Succeessful Chunk Registration \n");
-		 con->server->Send(con->Client, "1", 1);
+        if(filemap.find(filename) == filemap.end()) //file not exist
+        {
+         printf("Fail Chunk Registration \n");
+         con->server->Send(con->Client, "0", 1);
+        }
+
+        filenum = filemap[filename];
+        int id = chunkstart[filenum] + chunk_id;
+        chunk_loc[id].push_back(make_pair(ip, port));
+        printf("Succeessful Chunk Registration \n");
+        con->server->Send(con->Client, "1", 1);
 	}
 
     closesocket(con->Client);  
