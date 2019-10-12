@@ -16,7 +16,7 @@ using namespace std;
 #define MAX_MSG 2000
 #define MAX_FILE_NUM 500
 #define MAX_FILE_LENGTH 10000000
-#define MAX_CHUNK 100
+#define MAX_CHUNK 200
 #define MAX_TOTAL_MESSAGE 20000
 
 const int local_port = 10020;
@@ -26,22 +26,16 @@ const string local_IP = "127.0.0.1";
 
 map<string, int> filemap;
 int peer_file_num;
-int peer_chunk_num;
 vector<string> sp;
 int request_num;
 string file_list[MAX_FILE_NUM];
-string chunk_list[MAX_FILE_NUM];
 
 string next_ip;
 
 string new_file;
 int new_file_length;
-string new_chunk_list[MAX_FILE_NUM];
 
 string temp_file_list[MAX_FILE_NUM];
-string temp_chunk_list[MAX_FILE_NUM];
-int temp_file_length[MAX_FILE_NUM];
-string temp_message[MAX_FILE_NUM];
 
 string recv_file_name[MAX_FILE_NUM];
 int recv_file_size[MAX_FILE_NUM];
@@ -50,16 +44,14 @@ string recv_ips[MAX_FILE_NUM];
 int recv_ports[MAX_FILE_NUM];
 int recv_tmplist_size;
 int recv_chunk_num[MAX_FILE_NUM];
-int recv_chunks[MAX_FILE_NUM];
 
-int temp_file_num;
 string local_file_path = ".\\files";
 string local_chunk_path = ".\\chunks";
 
 bool marker = true;
 
 
-struct register_requset
+struct register_requset  //request 1 message to server
 {
 	int file_num;
 	//string file_name[MAX_FILE_NUM];
@@ -68,24 +60,25 @@ struct register_requset
 	int file_length;
 };
 
-struct file_location_request
+struct file_location_request //request 2 message to server
 {
 	string file_name;
 };
 
-struct chunk_register_request
+struct chunk_register_request // request 3 message to server
 {
 	char file_name[MAX_FILE_NAME];
 	int chunk_num;
 };
 
-struct file_chuck_request
+struct file_chuck_request // request 4 message to server
 {
 	char file_name[MAX_FILE_NAME];
 	int chunk_num;
 };
 
 
+//Message Analysis: split the string with " "
 void SplitString(const string& s, vector<std::string>& v, const string& c)
 {
   string::size_type pos1, pos2;
@@ -105,7 +98,7 @@ void SplitString(const string& s, vector<std::string>& v, const string& c)
 }
 
 
-
+//Assemble chunks into a file
 void file_assembler(string file_name,int file_num)
 {
 	fstream fain,faout;
@@ -308,6 +301,7 @@ DWORD WINAPI ThreadDownloadFile(LPVOID pParam)
 	return 1;
 }
 
+//init request to server(user input 1,2)
 void init_request(int request_num, SOCKET target)
 {
 	//Server_socket server(local_port);
@@ -379,9 +373,28 @@ void init_request(int request_num, SOCKET target)
 
 	if(request_num == 3)
 	{
-		cout << "Choose a file to download:" << endl;
 		string put_in;
-		cin >> put_in;
+		bool correctness = false;
+		while(correctness == false)
+		{
+			cout << "Choose a file to download:" << endl;
+			cin >> put_in;
+			for(int i  = 0; i< recv_file_num; i++)
+			{
+				if(put_in == recv_file_name[i])
+				{
+					correctness = true;
+					break;
+				}
+				//correctness = false;
+			}
+			if(correctness != false)
+				break;
+			else
+				cout << "Invalid file name! Please try again!" << endl;
+
+		}
+
 		//SOCKET target;
 		flr.file_name = put_in;
 		cout << "File location requested!" << endl;
@@ -430,6 +443,7 @@ void init_request(int request_num, SOCKET target)
 	}
 }
 
+//Find all files under path file
 void dir(string path)
 {
 	struct _finddata_t fileInfo;
@@ -441,7 +455,6 @@ void dir(string path)
 	do
 	{
 		temp_file_list[i] = fileInfo.name;
-		//temp_file_length[i] = fileInfo.size;
 		//cout << "Files under path:" << endl;
 		//cout << fileInfo.name << endl;
 		i++;
@@ -452,6 +465,7 @@ void dir(string path)
 
 }
 
+//Split file into chunks
 void file_splitter(string file_name)
 {
 	fstream fsin,fsout;
@@ -475,25 +489,24 @@ void file_splitter(string file_name)
 	{
 		itoa(i,num,10);
 		temp_chunk = local_chunk_path + "/" + file_name + "#" + num;
-		//new_chunk_list[i] = file_name + "#" + num;
 		fsout.open(temp_chunk.c_str(),ios::out|ios::binary);
 		fsin.read(chunk_in,sizeof(chunk_in));
 		fsout.write(chunk_in,sizeof(chunk_in));
 		fsout.close();
 	}
-	cout << "n-1!" << endl;
+	//cout << "n-1!" << endl;
 	delete [] chunk_in;
 
 	int endchunk = file_size - chunk_size*(chunks-1);
 	itoa(chunks - 1,num,10);
 	temp_chunk = local_chunk_path + "/" + file_name + "#" + num;
-	//new_chunk_list[num] = file_name + "#" + num;
 	fsout.open(temp_chunk.c_str(),ios::out|ios::binary);
 	char chunk_last[endchunk];
 	fsin.read(chunk_last,sizeof(chunk_last));
 	fsout.write(chunk_last,sizeof(chunk_last));
 	fsout.close();
 	delete [] chunk_last;
+	cout << "Chunk Splitted!" << endl;
 }
 
 
@@ -613,7 +626,7 @@ DWORD WINAPI ThreadListen(LPVOID pParam)
 }
 
 
-
+//Request 1's action
 void regist_prepare()
 {
 	string put_in;
@@ -629,7 +642,7 @@ void regist_prepare()
 	{
 		
 		//k++;
-		cout << "Print the file name you want to regist, if you do not want to regist, print NO:" << endl;
+		cout << "Print the file name you want to register, if you do not want registeration, print NO:" << endl;
 		cin >> put_in;
 		new_file = put_in;
 		if(put_in == "NO")
@@ -676,6 +689,7 @@ void regist_prepare()
 	 
 }
 
+//Request 2's action
 void ask_request()
 {
 	SOCKET target;
@@ -716,19 +730,6 @@ void ask_request()
 
 int main()
 {
-	//dir(local_file_path);
-	//for(int i = 0; i < peer_file_num; i++)
-	//{
-	//	file_splitter(file_list[i]);
-	//}
-	//cout << "file splitted!" << endl;
-	//listen
-	//dir(local_chunk_path);
-	//for(int i = 0; i < peer_file_num; i++)
-	//{
-	//	chunk_list[i] = file_list[i];
-	//	cout << chunk_list[i] << endl;
-	//}
 	WORD sockVersion = MAKEWORD(2, 2);
     WSADATA data;
     if(WSAStartup(sockVersion, &data)!=0)
@@ -744,12 +745,17 @@ int main()
 	//request
 	while(1)
 	{
-	    cout << "Request number:" << endl;
+	    cout << "Print request number, if you want to quit, print 0:" << endl;
 	    cin >> request_num;
-	    if(request_num > 5 && request_num < 1)
+	    if(request_num == 0)
+	    {
+	    	break;
+	    }
+	    if(request_num > 2 && request_num < 1)
 	    {
 	    	cout << "invalid request" << endl;
 	    }
+
 	    else
 	    {
 	    	SOCKET target;
