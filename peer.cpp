@@ -8,6 +8,7 @@
 #include <winsock2.h>
 #include <string>
 #include <map>
+#include <ctime>
 #include <time.h>
 #include <io.h>
 #include "serversocket.h"
@@ -21,13 +22,16 @@ using namespace std;
 #define MAX_TOTAL_MESSAGE 20000
 
 const int choke_time = 10;
-const int local_port = 10020;
 const int buffer_size = 1024;
 const int chunk_size = 1024 * 1024;
 const string local_IP = "127.0.0.1";
 const int max_run = 1;
+
+int local_port;
 int now_run = 0;
 vector<pair<string, int>> chokedlist;
+vector<pair<string, int>> downloadlist;
+
 time_t last_time;
 
 map<string, int> filemap;
@@ -182,11 +186,11 @@ DWORD WINAPI ThreadDownloadChunk(LPVOID pParam)
 			if(Chokedpeer.find(cdown->peerlist[i]) != Chokedpeer.end() && Chokedpeer[cdown->peerlist[i]] == true)
 			{
 				Sleep(1000 * choke_time);
-				Chokedpeer[cdown->peerlist[i]] == false;
+				Chokedpeer[cdown->peerlist[i]] = false;
 			}
 
 			int total_message = 0;
-			total_message = sprintf(num_buffer, "1 %s %d",cdown->file_name.c_str(),cdown->chunk_name);
+			total_message = sprintf(num_buffer, "1 %s %d %s %d", local_IP.c_str(),local_port,cdown->file_name.c_str(),cdown->chunk_name);
 				
 			SOCKET target = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     
@@ -214,6 +218,13 @@ DWORD WINAPI ThreadDownloadChunk(LPVOID pParam)
 	            continue;
 			}
 
+
+			if(buffer[0] == '2')//choked
+			{
+				//f1<< cdown->chunk_name<<" "<< cdown->peerlist[i].first << " "<< cdown->peerlist[i].second<< " Target used !\n";
+	            closesocket(target);
+	            continue;
+			}
 			// closesocket(target);
 			// target = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 			// connect(target, (sockaddr *)&serAddr, sizeof(serAddr));
@@ -240,6 +251,7 @@ DWORD WINAPI ThreadDownloadChunk(LPVOID pParam)
 	            	desFile.write(file_buffer, readLen);
 	    	}
 	    	success = 1;
+			cdown->dl->downchunknum++;
 	    	desFile.close();
 			break;
 		}
@@ -249,14 +261,12 @@ DWORD WINAPI ThreadDownloadChunk(LPVOID pParam)
 		//Sleep(5000);
 	}
 
-	cdown->dl->downchunknum++;
 
 	f1 << "Chunk register requested!" << endl;
 	char request_buffer[buffer_size];
 
 	int total = sprintf(request_buffer,"4 ");
 	total += sprintf(request_buffer + total, "%s %d %s %d",local_IP.c_str(),local_port,cdown->file_name.c_str(),cdown->chunk_name);
-	
 
 	SOCKET servertarget;
 	servertarget = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -545,6 +555,7 @@ struct upload
 	int request_peer;
 	string request_file_name;
 	int request_chunk;
+	pair<string, int> host;
 };
 
 ofstream f("listen.log");
@@ -594,6 +605,12 @@ DWORD WINAPI Threadhandle(LPVOID pParam) //UPloadFile
 	closesocket(ul->request_peer);
 	srcFile.close();
 	now_run --;
+	for(int i = 0; i < downloadlist.size(); i++)
+		if(downloadlist[i] == ul->host)
+		{
+			downloadlist.erase(downloadlist.begin() + i);
+			break;
+		}
 }
 
 DWORD WINAPI ThreadListen(LPVOID pParam) //Upload Listen
@@ -609,9 +626,10 @@ DWORD WINAPI ThreadListen(LPVOID pParam) //Upload Listen
 	hMutex = CreateMutex(NULL, FALSE, "server receive");
 	
 	DWORD  threadId = 0;
+	f<<"Backend Listening"<<endl;  
+
 	while(1)  
 	{  
-		f<<"Backend Listening"<<endl;  
 		Client = accept(server.server, (SOCKADDR *)&remoteAddr, &nAddrlen);
 		if(Client == INVALID_SOCKET)  
 		{  
@@ -619,7 +637,6 @@ DWORD WINAPI ThreadListen(LPVOID pParam) //Upload Listen
 			continue;  
 		}  
 
-		f<<"Connection received: "<<inet_ntoa(remoteAddr.sin_addr)<<":"<<remoteAddr.sin_port<<endl;
 		f<< "File Chunk Request received!" << endl;
 		
 		upload* ul = new upload;
@@ -629,15 +646,35 @@ DWORD WINAPI ThreadListen(LPVOID pParam) //Upload Listen
 
 
 		int len = server.Recv(Client, recv_msg);
+	    string tmp = recv_msg;
+	    tmp = tmp.substr(0,len);
+		SplitString(tmp, fstring, " ");
 
-		pair<string, int> host = make_pair(inet_ntoa(remoteAddr.sin_addr), remoteAddr.sin_port);
+		pair<string, int> host = make_pair(fstring[1], atoi(fstring[2].c_str()));
+		f<<"Connection received: "<<fstring[1]<<":"<<fstring[2]<<endl;
+
+		int con = 1;
+		for(int i = 0; i < downloadlist.size(); i++)
+			if(host == downloadlist[i])
+			{
+				f<<"Connection used: "<<fstring[1]<<":"<<fstring[2]<<endl;
+
+				send(Client, "2", 1,0);
+				con = 0;
+				break;
+			}
 
 		for(int i = 0; i < chokedlist.size(); i++)
 			if(host == chokedlist[i])
 			{
+				f<<"Connection choked: "<<fstring[1]<<":"<<fstring[2]<<endl;
 				send(Client, "0", 1,0);
-				continue;
+				con = 0;
+				break;
 			}
+
+		if(con == 0)
+			continue;
 
 		if(now_run >= max_run)
 		{
@@ -647,6 +684,7 @@ DWORD WINAPI ThreadListen(LPVOID pParam) //Upload Listen
 			continue;
 		}
 
+		downloadlist.push_back(host);
 		send(Client, "1", 1,0);
 		now_run++;
 	
@@ -656,14 +694,12 @@ DWORD WINAPI ThreadListen(LPVOID pParam) //Upload Listen
 		// Client = accept(ul->server->server, (SOCKADDR *)&remoteAddr, &nAddrlen);
 		// len = ul->server->Recv(Client, recv_msg);
 
-	    string tmp = recv_msg;
-	    tmp = tmp.substr(0,len);
-		SplitString(tmp, fstring, " ");
 		
 		ul->server = &server;
 		ul->request_peer = Client;
-		ul->request_file_name = fstring[1];
-		ul->request_chunk = atoi(fstring[2].c_str());
+		ul->request_file_name = fstring[3];
+		ul->request_chunk = atoi(fstring[4].c_str());
+		ul->host = host;
 
 		HANDLE hThread;
 		hThread = CreateThread(NULL, 0, Threadhandle, ul, 0, &threadId);
@@ -808,6 +844,9 @@ void ask_request()
 int main()
 {
     last_time = time(NULL);  
+    srand(time(NULL));
+
+    local_port = rand();
 
 	WORD sockVersion = MAKEWORD(2, 2);
     WSADATA data;
