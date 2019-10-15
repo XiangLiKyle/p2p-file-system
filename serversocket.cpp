@@ -12,7 +12,7 @@ Server_socket::Server_socket(int host)
 void Server_socket::Start_listen()
 {
 	bind(server, (LPSOCKADDR)&sin, sizeof(sin));
-	listen(server, 20);
+	listen(server, 100);
 	return;
 }
 

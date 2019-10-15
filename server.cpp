@@ -187,7 +187,7 @@ DWORD WINAPI ThreadRun(LPVOID pParam)
         con->server->Send(con->Client, "1", 1);
 	}
 
-    closesocket(con->Client);  
+    //closesocket(con->Client);  
 
     return 0;
 }
@@ -204,17 +204,18 @@ int main()
 	Server_socket server(local_port);
 	server.Start_listen();
 
-	sockaddr_in remoteAddr;  
-	int nAddrlen = sizeof(remoteAddr);  
-	char revData[255];   
-	SOCKET Client; 
 	int len;
 	string type;
 	char buffer[1024];
+    printf("Start Listening\n");  
 
 	while(1)  
 	{  
-		printf("Start Listening\n");  
+        sockaddr_in remoteAddr;  
+        int nAddrlen = sizeof(remoteAddr);  
+        char revData[255];   
+        SOCKET Client; 
+
 		Client = accept(server.server, (SOCKADDR *)&remoteAddr, &nAddrlen);
 		if(Client == INVALID_SOCKET)  
 		{  
@@ -228,7 +229,7 @@ int main()
 		con->Client = Client;
 		con->Addr = remoteAddr;
 		con->server = &server;
-
+        cout<<Client<<endl;
 		len = server.Recv(Client, buffer);
 		type = buffer;
 
